@@ -258,9 +258,15 @@ func deleteRule(c *cli.Context) error {
 
 //Function to display all rules
 func displayRules(c *cli.Context) error {
+	var err error
 	utils.Info.Println("Retrieving Rules")
-	er := printRules()
-	return er
+
+	if c.Bool("hidden") == true {
+		err = printHiddenRules()
+	} else {
+		err = printRules()
+	}
+	return err
 }
 
 //sendMessage sends a message to the user, using their own Account
@@ -574,6 +580,36 @@ func printRules() error {
 		utils.Info.Println()
 	} else {
 		utils.Info.Printf("No Rules Found\n")
+	}
+	return nil
+}
+
+func printHiddenRules() error {
+	// Select properties 
+	cols := make([]mapi.PropertyTag, 3)
+	cols[0] = mapi.PidTagRuleName		// Name of the rule
+	cols[1] = mapi.PidTagRuleProvider	// Client application owning the rule
+	cols[2] = mapi.PidTagRuleActions	// Actions of the rule
+
+	// Fetch rules
+	rows, err := mapi.FetchRules(cols)
+	if err != nil {
+		return err
+	}
+
+	// Print rules
+	if rows.RowCount > 0 {
+		utils.Info.Printf("Found %d rules\n", rows.RowCount)
+		for k := 0; k < int(rows.RowCount); k++ {
+			ruleName := string(utils.FromUnicode(rows.RowData[k][0].ValueArray))
+			ruleProvider := string(utils.FromUnicode(rows.RowData[k][1].ValueArray))
+			ruleActions := string(hex.Dump(rows.RowData[k][2].ValueArray))
+			utils.Info.Printf("Rule Name:\t\t%s\n", ruleName)
+			utils.Info.Printf("Rule Provider:\t%s\n", ruleProvider)
+			utils.Info.Printf("Rule Actions [hexdump]:\n%s\n", ruleActions)
+		}
+	} else {
+		utils.Info.Printf("No rules found\n")
 	}
 	return nil
 }
@@ -1327,6 +1363,12 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 			Name:    "display",
 			Aliases: []string{"d"},
 			Usage:   "display all existing rules",
+			Flags:   []cli.Flag{
+				cli.BoolFlag{
+					Name:  "hidden",
+					Usage: "Find hidden inbox rules",
+				},
+			},
 			Action: func(c *cli.Context) error {
 				err := connect(c)
 				if err != nil {
@@ -1334,6 +1376,13 @@ A tool by @_staaldraad from @sensepost to abuse Exchange Services.`
 					cli.OsExiter(1)
 				}
 				err = displayRules(c)
+				/*
+				if c.Bool("hidden") == true {
+					err = nil
+				} else {
+					err = displayRules(c)
+				}
+				*/
 				exit(err)
 
 				return nil
